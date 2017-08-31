@@ -15,7 +15,7 @@ from urllib.error import HTTPError
 SIGN_URL = "http://swis.wmflabs.org/glyphogram.php?font=png&text={:}"
 DICTAPI_URL = "https://api.datamuse.com/words?sp={:}&md=f"
 
-FILE="us_dict.spml"
+FILE=sys.argv[0]
 
 class NoGlossesError (ValueError):
     """A sign puddle markup language entry had no valid glosses."""
@@ -61,19 +61,26 @@ def look_up_frequency(gloss):
         return cached_glosses[gloss]
     dictapi = DICTAPI_URL.format(quote_plus(gloss))
     gloss_dict = urlopen(dictapi).read().decode('utf-8')
-
+    
+    freq = None
+    if ' ' in gloss:
+        parts = gloss.split("-")
+        freq = sum(look_up_frequency(part) or 0.0
+                   for part in parts)/len(parts)
+    elif '-' in gloss:
+        parts = gloss.split("-")
+        freq = sum(look_up_frequency(part) or 0.0
+                   for part in parts)/len(parts)
+        
     parsed = json.loads(gloss_dict)
-    if not parsed:
-        cached_glosses[gloss] = None
-        return None
+    if not parsed or parsed[0]["word"] != gloss.lower():
+        cached_glosses[gloss] = freq
+        return cached_glosses[gloss]
 
-    if parsed[0]["word"] != gloss.lower():
-        cached_glosses[gloss] = None
-        return None
-
-    freq = float([
+    this_freq = float([
         f for f in parsed[0]['tags']
         if f.startswith('f:')][0][2:])
+    freq = this_freq if not freq or this_freq > freq else freq
     cached_glosses[gloss] = freq
     return freq
 

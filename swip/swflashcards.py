@@ -18,8 +18,6 @@ import swip.compose
 ET.register_namespace("", "http://www.w3.org/2000/svg")
 DICTAPI_URL = "https://api.datamuse.com/words?sp={:}&md=f"
 
-FILE=sys.argv[1]
-
 class NoGlossesError (ValueError):
     """A sign puddle markup language entry had no valid glosses."""
 
@@ -125,35 +123,36 @@ strange = []
 frequencies = []
 signs_by_frequency = []
 
-tree = ET.parse(FILE)
-root = tree.getroot()
 try:
-    for entry in root.findall("entry"):
-        try:
-            sign = Sign.from_spml_entry(entry)
-        except NoGlossesError:
-            rejected.append(entry)
-            continue
-
-        frequency = 0.0
-        is_strange = True
-        for gloss in sign.glosses:
+    for FILE in sys.argv[1:]:
+        tree = ET.parse(FILE)
+        root = tree.getroot()
+        for entry in root.findall("entry"):
             try:
-                # Make sure that the rarest words are at the end of the list.
-                frequency -= look_up_frequency(gloss)
-                is_strange = False
-            except TypeError:
-                pass
+                sign = Sign.from_spml_entry(entry)
+            except NoGlossesError:
+                rejected.append(entry)
+                continue
 
-        if is_strange:
-            strange.append(sign)
-        else:
-            index = bisect.bisect(frequencies, frequency)
-            frequencies.insert(index, frequency)
-            signs_by_frequency.insert(index, sign)
+            frequency = 0.0
+            is_strange = True
+            for gloss in sign.glosses:
+                try:
+                    # Make sure that the rarest words are at the end of the list.
+                    frequency -= look_up_frequency(gloss)
+                    is_strange = False
+                except TypeError:
+                    pass
+
+            if is_strange:
+                strange.append(sign)
+            else:
+                index = bisect.bisect(frequencies, frequency)
+                frequencies.insert(index, frequency)
+                signs_by_frequency.insert(index, sign)
 except KeyboardInterrupt:
     pass
-    
+
 with open('gloss_freqs.json', "w") as json_data:
     json.dump(cached_glosses, json_data)
 
@@ -166,10 +165,11 @@ OUTFILE_b = (FILE[:-5] if FILE.endswith(".spml") else FILE) + "_b.html"
 
 STYLE = """
 tr { page-break-inside: avoid; }
-td { height: 4.5cm; width: %fcm; text-align: center; border: 0.3pt solid black; page-break-inside: avoid; }
+td { height: 4.5cm; width: %fcm; text-align: center; border: 0.3pt solid black; page-break-inside: avoid; overflow: hidden; }
 svg { max-width: 100%%; max-height: 4.5cm; overflow: hidden; }
-p { max-width: 100%%; max-height: 4.5cm; overflow: hidden; }
-""" % (18 / COLUMNS)
+p { max-width: %fcm; max-height: 4.5cm; overflow: hidden; }
+p.comment { 0.5em; }
+""" % (18 / COLUMNS,18 / COLUMNS,18 / COLUMNS,18 / COLUMNS)
 
 html_f = ET.Element('html')
 document_f = ET.ElementTree(html_f)
@@ -204,6 +204,8 @@ try:
         cell_b = ET.Element('td')
         row_b.insert(0, cell_b)
         ET.SubElement(cell_b, 'p').text = '; '.join(sign.glosses)
+        if sign.comment:
+            ET.SubElement(cell_b, 'p', **{'class': 'comment'}).text = sign.comment
 except KeyboardInterrupt:
     cell_b = ET.Element('td')
     row_b.insert(0, cell_b)

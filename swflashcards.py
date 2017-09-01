@@ -9,8 +9,8 @@ import base64
 import xml.etree.ElementTree as ET
 
 from urllib.request import urlopen
-from urllib.parse import quote_plus
 from urllib.error import HTTPError
+from urllib.parse import quote_plus
 
 SIGN_URL = "http://swis.wmflabs.org/glyphogram.php?font=png&text={:}"
 DICTAPI_URL = "https://api.datamuse.com/words?sp={:}&md=f"
@@ -100,8 +100,19 @@ def generate_sign(string):
     if string in cached_images:
         image = cached_images[string]
     else:
+        try:
+            with open(string + '.png', 'rb') as localfile:
+                raw = localfile.read()
+        except (FileNotFoundError, OSError):
+            raw = urlopen(SIGN_URL.format(string)).read()
+            try:
+                with open(string + '.png', 'wb') as localfile:
+                    localfile.write(raw)
+            except OSError:
+                pass
         image = cached_images[string] = (
-            base64.b64encode(urlopen(SIGN_URL.format(string)).read()).decode("ascii"))
+            base64.b64encode(raw).decode("ascii"))
+        cached_images[string] = image
     return "data:image/png;base64,{:}".format(image)
     
 
@@ -122,19 +133,21 @@ try:
             continue
 
         frequency = 0.0
+        is_strange = True
         for gloss in sign.glosses:
             try:
                 # Make sure that the rarest words are at the end of the list.
                 frequency -= look_up_frequency(gloss)
+                is_strange = False
             except TypeError:
-                strange.append(sign)
+                pass
 
-        if frequency:
+        if is_strange:
+            strange.append(sign)
+        else:
             index = bisect.bisect(frequencies, frequency)
             frequencies.insert(index, frequency)
             signs_by_frequency.insert(index, sign)
-        else:
-            strange.append(sign)
 except KeyboardInterrupt:
     pass
     
@@ -150,9 +163,9 @@ OUTFILE_b = (FILE[:-5] if FILE.endswith(".spml") else FILE) + "_b.html"
 
 STYLE = """
 tr { page-break-inside: avoid; }
-td { height: 5cm; width: %fcm; text-align: center; border: 0.3pt solid black; page-break-inside: avoid; }
-img { max-width: 100%%; max-height: 5cm; overflow: hidden}
-p { max-width: 100%%; max-height: 5cm; overflow: hidden; }
+td { height: 4.5cm; width: %fcm; text-align: center; border: 0.3pt solid black; page-break-inside: avoid; }
+img { max-width: 100%%; max-height: 4.5cm; overflow: hidden}
+p { max-width: 100%%; max-height: 4.5cm; overflow: hidden; }
 """ % (18 / COLUMNS)
 
 html_f = ET.Element('html')

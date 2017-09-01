@@ -15,7 +15,7 @@ from urllib.error import HTTPError
 SIGN_URL = "http://swis.wmflabs.org/glyphogram.php?font=png&text={:}"
 DICTAPI_URL = "https://api.datamuse.com/words?sp={:}&md=f"
 
-FILE=sys.argv[0]
+FILE=sys.argv[1]
 
 class NoGlossesError (ValueError):
     """A sign puddle markup language entry had no valid glosses."""
@@ -53,10 +53,15 @@ class Sign:
 try:
     cached_glosses
 except NameError:
-    cached_glosses = {}
+    try:
+        with open('gloss_freqs.json') as json_data:
+            cached_glosses = json.load(json_data)
+    except FileNotFoundError:
+        cached_glosses = {}
 
 
 def look_up_frequency(gloss):
+    print(gloss)
     if gloss in cached_glosses:
         return cached_glosses[gloss]
     dictapi = DICTAPI_URL.format(quote_plus(gloss))
@@ -64,7 +69,7 @@ def look_up_frequency(gloss):
     
     freq = None
     if ' ' in gloss:
-        parts = gloss.split("-")
+        parts = gloss.split(" ")
         freq = sum(look_up_frequency(part) or 0.0
                    for part in parts)/len(parts)
     elif '-' in gloss:
@@ -118,7 +123,6 @@ try:
 
         frequency = 0.0
         for gloss in sign.glosses:
-            print(gloss)
             try:
                 # Make sure that the rarest words are at the end of the list.
                 frequency -= look_up_frequency(gloss)
@@ -134,6 +138,10 @@ try:
 except KeyboardInterrupt:
     pass
     
+with open('gloss_freqs.json', "w") as json_data:
+    json.dump(cached_glosses, json_data)
+
+strange = sorted(strange, key=lambda x: len(x.glosses[0]))
 
 COLUMNS=4
 
@@ -141,9 +149,9 @@ OUTFILE_f = (FILE[:-5] if FILE.endswith(".spml") else FILE) + "_f.html"
 OUTFILE_b = (FILE[:-5] if FILE.endswith(".spml") else FILE) + "_b.html"
 
 STYLE = """
-tr { page-break-inside : avoid }
-td { height: 5cm; width: %fcm; text-align: center; border: 0.3pt solid black; }
-img { max-width: 100%%; max-height: 5cm; }
+tr { page-break-inside: avoid; }
+td { height: 5cm; width: %fcm; text-align: center; border: 0.3pt solid black; page-break-inside: avoid; }
+img { max-width: 100%%; max-height: 5cm; overflow: hidden}
 p { max-width: 100%%; max-height: 5cm; overflow: hidden; }
 """ % (18 / COLUMNS)
 

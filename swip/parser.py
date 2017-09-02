@@ -256,16 +256,16 @@ symbol_ranges = {
     'punctuation': (0x387, 0x38b)}
 
 
-def sign_id(symbol):
+def symbol_id(symbol):
     """This basic shape's integer ID.
 
     A helper function for looking up symbol types. Following the `S`,
     the first three symbols are the hexadecimal number of the symbol
     (up to rotation or similar variation).
 
-    >>> sign_id('S10350') == 0x103
+    >>> symbol_id('S10350') == 0x103
     True
-    >>> sign_id('2a6') == 0x2a6
+    >>> symbol_id('2a6') == 0x2a6
     True
 
     """
@@ -290,7 +290,7 @@ def is_type(symbol, type):
 
     """
     try:
-        symbol = sign_id(symbol)
+        symbol = symbol_id(symbol)
     except AttributeError:
         pass
     try:
@@ -298,6 +298,31 @@ def is_type(symbol, type):
             symbol_ranges[type][0] <= symbol <= symbol_ranges[type][1])
     except KeyError:
         raise ValueError('No symbol type {:}.'.format(type))
+
+
+def symbol_type(symbol):
+    """Return the type of the symbol.
+
+    >>> symbol_type(0x100)
+    'hand'
+    >>> symbol_type('S38b00')
+    'punctuation'
+    >>> symbol_type('S37e00')
+    'limb'
+
+    """
+
+    try:
+        symbol = symbol_id(symbol)
+    except AttributeError:
+        pass
+    for type, (lower, upper) in symbol_ranges.items():
+        if type == 'iswa' or type == 'writing':
+            # Not a fundamental type
+            continue
+        if lower <= symbol <= upper:
+            return type
+    raise ValueError('Not a valid symbol: {:}'.format(symbol))
 
 
 def swnumber(string):

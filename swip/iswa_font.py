@@ -111,3 +111,30 @@ class ISWAFont:
         </svg>
         """.format(
             w=w, h=h, symbol=symbol, glyph=glyph)
+
+    def glyph(self, key,
+              line='#000000', fill='#ffffff'):
+        """Return the (raw) glyph, potentially recolored.
+
+        >>> print(ISWAFont().glyph('S10000'))
+        ... # doctest: +NORMALIZE_WHITESPACE +REPORT_NDIFF
+        <g>
+        <rect id="index" x="13" y="0" width="2" height="15" fill="#000000" />
+        <rect id="base" x="0" y="15" width="15" height="15" fill="#000000" />
+        <rect id="fill" x="2" y="17" width="11" height="11" fill="#ffffff" />
+        </g>
+        >>> print(ISWAFont().glyph('S10000', fill='#00ffff', line='#0000ff'))
+        ... # doctest: +NORMALIZE_WHITESPACE +REPORT_NDIFF
+        <g>
+        <rect id="index" x="13" y="0" width="2" height="15" fill="#0000ff" />
+        <rect id="base" x="0" y="15" width="15" height="15" fill="#0000ff" />
+        <rect id="fill" x="2" y="17" width="11" height="11" fill="#00ffff" />
+        </g>
+
+        """
+        svg, w, h = self.svg_snippet(key)
+        svg = svg.replace('#000000', '__line_color__')
+        svg = svg.replace('#ffffff', '__fill_color__')
+        svg = svg.replace('__line_color__', line)
+        svg = svg.replace('__fill_color__', fill)
+        return svg

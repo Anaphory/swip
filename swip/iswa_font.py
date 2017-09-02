@@ -49,7 +49,6 @@ class ISWAFont:
             (int(symbol_key[0:3], 16) - 256) * 96 +
             int(symbol_key[3:5], 16))
 
-
     def svg_snippet(self, symbol):
         """Get an SVG glyph snippet from the database.
 
@@ -73,21 +72,27 @@ class ISWAFont:
         glyph, w, h = self.c.fetchone()
         return glyph, w, h
 
-
     def complete_svg(self, symbol):
         """Load the image corresponding to `key` from the database.
 
         >>> iswa = ISWAFont()
-        >>> print(iswa.complete_svg('S1000f')) # doctest: +NORMALIZE_WHITESPACE +REPORT_NDIFF
+        >>> print(iswa.complete_svg('S1000f'))
+        ... # doctest: +NORMALIZE_WHITESPACE +REPORT_NDIFF
         <?xml version="1.0" standalone="no"?>
-        <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
-        <svg version="1.0" xmlns="http://www.w3.org/2000/svg width="30" height="21">
-        <metadata>S1000f</metadata>
-        <g transform="scale(0.938 0.913) translate(10.667 -9) rotate(315) scale(-1,1)">
-            <rect id="index" x="13" y="0" width="2" height="15" fill="#000000" />
-            <rect id="base" x="0" y="15" width="15" height="15" fill="#000000" />
-            <rect id="fill" x="2" y="17" width="11" height="11" fill="#ffffff" />
-        </g>
+        <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN"
+            "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+        <svg version="1.0" xmlns="http://www.w3.org/2000/svg
+            width="30" height="21">
+          <metadata>S1000f</metadata>
+          <g transform="scale(0.938 0.913) translate(10.667 -9)
+              rotate(315) scale(-1,1)">
+            <rect id="index" x="13" y="0"
+                width="2" height="15" fill="#000000" />
+            <rect id="base" x="0" y="15"
+                width="15" height="15" fill="#000000" />
+            <rect id="fill" x="2" y="17"
+                width="11" height="11" fill="#ffffff" />
+          </g>
         </svg>
 
         """
@@ -99,7 +104,8 @@ class ISWAFont:
         return """<?xml version="1.0" standalone="no"?>
         <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN"
         "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
-        <svg version="1.0" xmlns="http://www.w3.org/2000/svg width="{w:d}" height="{h:d}">
+        <svg version="1.0" xmlns="http://www.w3.org/2000/svg
+            width="{w:d}" height="{h:d}">
         <metadata>S{symbol:s}</metadata>
         {glyph:s}
         </svg>

@@ -6,6 +6,7 @@ import io
 import bisect
 
 import os
+import sys
 import json
 import argparse
 
@@ -135,6 +136,7 @@ def main():
     parser.add_argument(
         "spml_file",
         nargs='+',
+        type=argparse.FileType('r'),
         help='SPML file(s) to parse')
     parser.add_argument(
         "--gloss-scores",
@@ -150,10 +152,26 @@ def main():
         help="HTML file to write glosses to")
     args = parser.parse_args()
 
+    if args.front is None:
+        name = args.spml_file[0].name
+        args.front = open(
+            (name[:-5] if name.endswith('.spml') else name) +
+            '_f.html', 'wb')
+    if args.back is None:
+        name = args.front.name
+        args.back = open(
+            (name[:-7] if name.endswith('_f.html') else
+             name[:-5] if name.endswith('.html') else name) +
+            '_b.html', 'wb')
+
     # Read a cache file of gloss scores
-    score_cache = json.load(args.gloss_scores)
+    if args.gloss_scores:
+        score_cache = json.load(args.gloss_scores)
+    else:
+        score_cache = {}
 
     def scorer(gloss):
+        print(gloss, file=sys.stderr)
         try:
             return score_cache[gloss]
         except KeyError:
@@ -173,11 +191,11 @@ def main():
         pass
 
     # Try to write-back a file of gloss scores
-    args.gloss_scores.close()
     try:
+        args.gloss_scores.close()
         with open(args.gloss_scores.name, "w") as json_data:
             json.dump(score_cache, json_data)
-    except OSError:
+    except (AttributeError, OSError):
         pass
 
     # HTML Template
@@ -212,7 +230,7 @@ def main():
                 # Start a new row
                 row_f = ET.SubElement(table_f, 'tr')
                 row_b = ET.SubElement(table_b, 'tr')
-                print(i)
+                print(i, file=sys.stderr)
 
             cell_f = ET.SubElement(row_f, 'td')
             cell_b = ET.Element('td')

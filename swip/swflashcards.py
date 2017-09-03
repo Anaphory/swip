@@ -55,6 +55,16 @@ class Sign:
 
 
 def look_up_frequency(gloss):
+    """Load frequency data from Datamuse
+
+    >>> look_up_frequency("apple")
+    19.314666
+    >>> look_up_frequency("juice")
+    17.828465
+    >>> look_up_frequency("apple-juice") == 0.5 * (
+    ... look_up_frequency("apple")+look_up_frequency("juice"))
+    True
+    """
     dictapi = DICTAPI_URL.format(quote_plus(gloss))
     gloss_dict = urlopen(dictapi).read().decode('utf-8')
 
@@ -62,11 +72,11 @@ def look_up_frequency(gloss):
     if ' ' in gloss:
         parts = gloss.split(" ")
         freq = sum(look_up_frequency(part) or 0.0
-                   for part in parts)/len(parts)
+                   for part in parts) / len(parts)
     elif '-' in gloss:
         parts = gloss.split("-")
         freq = sum(look_up_frequency(part) or 0.0
-                   for part in parts)/len(parts)
+                   for part in parts) / len(parts)
 
     parsed = json.loads(gloss_dict)
     if not parsed or parsed[0]["word"] != gloss.lower():
@@ -142,6 +152,7 @@ def main():
 
     # Read a cache file of gloss scores
     score_cache = json.load(args.gloss_scores)
+
     def scorer(gloss):
         try:
             return score_cache[gloss]
@@ -168,7 +179,6 @@ def main():
             json.dump(score_cache, json_data)
     except OSError:
         pass
-
 
     # HTML Template
     COLUMNS = 4

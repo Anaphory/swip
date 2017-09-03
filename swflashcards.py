@@ -197,6 +197,8 @@ try:
         svg = ET.parse(io.StringIO(swip.compose.glyphogram(
             sign.sign_string,
             bound=None))).getroot()
+        svg.attrib['viewbox'] = "0 0 {:} {:}".format(
+            svg.attrib['width'], svg.attrib['height'])
         cell_f.insert(0, svg)
 
         cell_b = ET.Element('td')

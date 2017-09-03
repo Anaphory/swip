@@ -45,7 +45,8 @@ def glyphogram(ksw_string, pad=1, bound=None, line='#000000',
     # Process cluster string
     layout = parser.parse(ksw_string)
     x_max, y_max = layout[0][1]
-    x_min, y_min = parser.min_coordinates(layout)
+    x_min, y_min = parser.min_coordinates(layout, False)
+    print(x_min, x_max, y_min, y_max)
 
     # Crudely center the image
     if bound == 'c' or bound == 'h':

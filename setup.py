@@ -21,7 +21,7 @@ setup(
         'swip'],
     entry_points={
         'console_scripts': [
-            'swip=swip',
+            'swip=swip.__main__:main',
         ]
     },
     tests_require=['nose'],

@@ -1,5 +1,6 @@
 #!python3
 
+import io
 import bisect
 
 import sys
@@ -12,7 +13,9 @@ from urllib.request import urlopen
 from urllib.error import HTTPError
 from urllib.parse import quote_plus
 
-SIGN_URL = "http://swis.wmflabs.org/glyphogram.php?font=png&text={:}"
+import swip.compose
+
+ET.register_namespace("", "http://www.w3.org/2000/svg")
 DICTAPI_URL = "https://api.datamuse.com/words?sp={:}&md=f"
 
 FILE=sys.argv[1]
@@ -164,7 +167,7 @@ OUTFILE_b = (FILE[:-5] if FILE.endswith(".spml") else FILE) + "_b.html"
 STYLE = """
 tr { page-break-inside: avoid; }
 td { height: 4.5cm; width: %fcm; text-align: center; border: 0.3pt solid black; page-break-inside: avoid; }
-img { max-width: 100%%; max-height: 4.5cm; overflow: hidden}
+svg { max-width: 100%%; max-height: 4.5cm; overflow: hidden; }
 p { max-width: 100%%; max-height: 4.5cm; overflow: hidden; }
 """ % (18 / COLUMNS)
 
@@ -191,8 +194,10 @@ try:
             print(i)
 
         cell_f = ET.SubElement(row_f, 'td')
-        img_f = ET.SubElement(cell_f, 'img', src=generate_sign(sign.sign_string))
-
+        svg = ET.parse(io.StringIO(swip.compose.glyphogram(
+            sign.sign_string,
+            bound=None))).getroot()
+        cell_f.insert(0, svg)
 
         cell_b = ET.Element('td')
         row_b.insert(0, cell_b)

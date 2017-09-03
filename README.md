@@ -35,3 +35,20 @@ user-supplied font names!
 In a slightly less dangerous fashion, SVG code generated is not
 cleanly validated and may be subject to XSS attacks or similar, if SVG
 snippets are not from a trusted source.
+
+# swflashcards
+This project comes with a small script to generate HTML for printing
+flash cards from a SignPuddle SPML export. Go to a SignPuddle
+dictionary's Export pane, download "Export source Entire Puddle" which
+gives you a file like `sgn53.spml` containing some kind of badly
+structured xml. Then,
+
+```
+$ swflashcards sgn53.spml
+```
+
+will generate two html files called `sgn53_f.html` (containing the
+SignWriting images) and `sgn53_b.html` (containing glosses and
+comments). The two tables are horizontal mirror images of each other,
+so you can print alternating pages of each on front and back sides
+(flipping on long edge) to generate flash cards.

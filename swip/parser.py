@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """parser: SignWriting string parse functions
 
@@ -409,10 +409,10 @@ def parse(layout_string):
             'String {:} contained unrecognized elements'.format(
                 sw_string))
 
-    if match[1]:
+    if match.group(1):
         # This is a punctuation character
-        punct = match[2]
-        coord = coordinates(match[3])
+        punct = match.group(2)
+        coord = coordinates(match.group(3))
         return [
             ('B', (-coord[0], -coord[1])),
             (punct, coord)]
@@ -423,15 +423,15 @@ def parse(layout_string):
         max_x = max_y = float('-inf')
         for symbol in re.findall(
                 SYMBOL_BLOCK + COORD_BLOCK,
-                match[6]):
+                match.group(6)):
             coord = coordinates(symbol[6:])
             max_x = max(max_x, coord[0])
             max_y = max(max_y, coord[1])
             cluster.append(
                 (symbol[:6], coord))
         cluster.insert(
-            0, (match[4][0],
-                coordinates(match[5]) if match[5] else (max_x, max_y)))
+            0, (match.group(4)[0],
+                coordinates(match.group(5)) if match.group(5) else (max_x, max_y)))
         return cluster
 
 

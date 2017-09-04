@@ -161,6 +161,11 @@ def main():
         "--back",
         type=argparse.FileType('wb'),
         help="HTML file to write glosses to")
+    parser.add_argument(
+        "--columns",
+        type=int,
+        default=5,
+        help="Print this many columns of cards per row")
     args = parser.parse_args()
 
     if args.front is None:
@@ -206,19 +211,21 @@ def main():
     try:
         args.gloss_scores.close()
         with open(args.gloss_scores.name, "w") as json_data:
-            json.dump(score_cache, json_data)
+            json.dump(score_cache, json_data, sort_keys=True, indent=4)
     except (AttributeError, OSError):
         pass
 
     # HTML Template
-    COLUMNS = 4
+    COLUMNS = args.columns
 
     STYLE = """
-    tr { page-break-inside: avoid; }
-    td { height: 4.5cm; width: %fcm; text-align: center; border: 0.3pt solid black; page-break-inside: avoid; }
-    svg { max-width: 100%%; max-height: 4.5cm; overflow: hidden; }
-    p { max-width: 100%%; max-height: 4.5cm; overflow: hidden; }
-    """ % (18 / COLUMNS)
+    tr {{ page-break-inside: avoid; max-height: {length:f}cm; overflow: hidden; }}
+    td {{ height: {length:f}cm; width: {length:f}cm; border: 0.3pt solid black; page-break-inside: avoid; }}
+    svg {{ max-width: {length:f}cm; max-height: {length:f}cm; overflow: hidden; }}
+    td div {{ max-width: {length:f}cm; max-height: {length:f}cm; text-align: center; overflow: hidden; }}
+    p {{ max-width: {length:f}cm; max-height: {length:f}cm; overflow: hidden; }}
+    p.comment {{ font-size: 0.5em; }}
+    """.format(length=18/COLUMNS)
 
     html_f = ET.Element('html')
     document_f = ET.ElementTree(html_f)
@@ -261,13 +268,14 @@ def main():
                 pass
 
             # Back contains gloss
-            ET.SubElement(cell_b, 'p').text = '; '.join(sign.glosses)
+            maxsize = ET.SubElement(cell_b, 'div')
+            ET.SubElement(maxsize, 'p').text = '; '.join(sign.glosses)
             if sign.comment:
-                ET.SubElement(cell_b, 'p', **{'class': 'comment'}).text = sign.comment
-        i += 1
+                ET.SubElement(maxsize, 'p', **{'class': 'comment'}).text = sign.comment
     except KeyboardInterrupt:
         pass
 
+    i += 1
     # Fill up last row, so that mirror symmetry is given
     while i % COLUMNS != 0:
         cell_f = ET.SubElement(row_f, 'td')

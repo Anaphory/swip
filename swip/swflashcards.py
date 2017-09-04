@@ -18,7 +18,7 @@ import swip.compose
 ET.register_namespace("", "http://www.w3.org/2000/svg")
 DICTAPI_URL = "https://api.datamuse.com/words?sp={:}&md=f"
 
-class NoGlossesError (ValueError):
+class UncleanEntryError (ValueError):
     """A sign puddle markup language entry had no valid glosses."""
 
 
@@ -34,11 +34,13 @@ class Sign:
         data = spml_entry.findall("term")
         glosses = [element.text for element in data[1:]]
         if not glosses:
-            raise NoGlossesError
+            raise UncleanEntryError
         sign = cl(data[0].text, glosses)
 
         comment = entry.find("text")
         if comment is not None:
+            if comment.text[0] == 'M' and comment.text[4] == 'x':
+                raise UncleanEntryError
             sign.comment = comment.text
 
         source = entry.find("src")
@@ -67,7 +69,7 @@ def look_up_frequency(gloss):
         return cached_glosses[gloss]
     dictapi = DICTAPI_URL.format(quote_plus(gloss))
     gloss_dict = urlopen(dictapi).read().decode('utf-8')
-    
+
     freq = None
     if ' ' in gloss:
         parts = gloss.split(" ")
@@ -77,7 +79,7 @@ def look_up_frequency(gloss):
         parts = gloss.split("-")
         freq = sum(look_up_frequency(part) or 0.0
                    for part in parts)/len(parts)
-        
+
     parsed = json.loads(gloss_dict)
     if not parsed or parsed[0]["word"] != gloss.lower():
         cached_glosses[gloss] = freq
@@ -115,7 +117,7 @@ def generate_sign(string):
             base64.b64encode(raw).decode("ascii"))
         cached_images[string] = image
     return "data:image/png;base64,{:}".format(image)
-    
+
 
 rejected = []
 strange = []
@@ -130,7 +132,7 @@ try:
         for entry in root.findall("entry"):
             try:
                 sign = Sign.from_spml_entry(entry)
-            except NoGlossesError:
+            except UncleanEntryError:
                 rejected.append(entry)
                 continue
 
@@ -158,18 +160,18 @@ with open('gloss_freqs.json', "w") as json_data:
 
 strange = sorted(strange, key=lambda x: len(x.glosses[0]))
 
-COLUMNS=4
+COLUMNS=5
 
 OUTFILE_f = (FILE[:-5] if FILE.endswith(".spml") else FILE) + "_f.html"
 OUTFILE_b = (FILE[:-5] if FILE.endswith(".spml") else FILE) + "_b.html"
 
 STYLE = """
-tr { page-break-inside: avoid; }
-td { height: 4.5cm; width: %fcm; text-align: center; border: 0.3pt solid black; page-break-inside: avoid; overflow: hidden; }
-svg { max-width: 100%%; max-height: 4.5cm; overflow: hidden; }
-p { max-width: %fcm; max-height: 4.5cm; overflow: hidden; }
-p.comment { 0.5em; }
-""" % (18 / COLUMNS,18 / COLUMNS,18 / COLUMNS,18 / COLUMNS)
+tr {{ page-break-inside: avoid; }}
+td {{ height: {length:f}cm; width: {length:f}cm; max-height: {length:f}cm; text-align: center; border: 0.3pt solid black; page-break-inside: avoid; overflow: hidden; }}
+svg {{ max-width: {length:f}cm; max-height: {length:f}cm; overflow: hidden; }}
+p {{ max-width: {length:f}cm; max-height: {length:f}cm; overflow: hidden; }}
+p.comment {{ font-size: 0.5em; }}
+""".format(length=18/COLUMNS)
 
 html_f = ET.Element('html')
 document_f = ET.ElementTree(html_f)
@@ -193,6 +195,15 @@ try:
             row_b = ET.SubElement(table_b, 'tr')
             print(i)
 
+        try:
+            image_src = generate_sign(sign.sign_string)
+        except HTTPError:
+            rejected.append(sign)
+            cell_f = ET.SubElement(row_f, 'td')
+            cell_b = ET.Element('td')
+            row_b.insert(0, cell_b)
+            continue
+
         cell_f = ET.SubElement(row_f, 'td')
         svg = ET.parse(io.StringIO(swip.compose.glyphogram(
             sign.sign_string,
@@ -206,18 +217,18 @@ try:
         ET.SubElement(cell_b, 'p').text = '; '.join(sign.glosses)
         if sign.comment:
             ET.SubElement(cell_b, 'p', **{'class': 'comment'}).text = sign.comment
+
+    i += 1
 except KeyboardInterrupt:
-    cell_b = ET.Element('td')
-    row_b.insert(0, cell_b)
-    
-    
-i += 1
+    pass
+
+
 while i % COLUMNS != 0:
     cell_f = ET.SubElement(row_f, 'td')
     cell_b = ET.Element('td')
     row_b.insert(0, cell_b)
     i += 1
-    
+
 document_f.write(OUTFILE_f)
 document_b.write(OUTFILE_b)
 

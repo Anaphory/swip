@@ -28,7 +28,7 @@ class UncleanEntryError (ValueError):
 class Sign:
     def __init__(self, sign, glosses, comment=None, source=None):
         self.sign_string = sign
-        self.glosses = glosses
+        self.glosses = tuple(glosses)
         self.comment = comment
         self.source = source
 
@@ -91,11 +91,12 @@ def look_up_frequency(gloss):
     return freq
 
 
-def parse_spml(spml_file, signs=None, scores=None, scorer=look_up_frequency, debug=False):
-    if signs is None:
-        signs = []
+def parse_spml(spml_file, signs_by_gloss=None, ordered_glosses=None, scores=None, scorer=look_up_frequency, debug=False):
+    if signs_by_gloss is None:
+        signs_by_gloss = {}
+        ordered_glosses = []
     if scores is None:
-        scores = [0 for sign in signs]
+        scores = [0 for sign in signs_by_gloss]
     rejected = []
     strange = []
 
@@ -118,17 +119,26 @@ def parse_spml(spml_file, signs=None, scores=None, scorer=look_up_frequency, deb
             except TypeError:
                 pass
 
-        if is_strange:
+        if sign.glosses in signs_by_gloss:
+            if len(sign.sign_string) > len(signs_by_gloss[sign.glosses].sign_string):
+                # Assume longer sign means more detailed transcription means better
+                strange.append(signs_by_gloss[sign.glosses])
+                signs_by_gloss[sign.glosses] = sign
+            else:
+                # Duplicate gloss
+                strange.append(sign)
+        elif is_strange:
             strange.append(sign)
         else:
             index = bisect.bisect(scores, frequency)
             scores.insert(index, frequency)
-            signs.insert(index, sign)
+            signs_by_gloss[sign.glosses] = sign
+            ordered_glosses.insert(index, sign.glosses)
 
     if debug:
-        return signs, strange, rejected
+        return signs_by_gloss, strange, rejected
     else:
-        return signs, strange
+        return signs_by_gloss, strange
 
 
 def main():
@@ -182,11 +192,12 @@ def main():
 
     # Read all signs from a spml file
     try:
-        signs = []
+        signs = {}
+        glosses = []
         scores = []
         strange = []
         for file in args.spml_file:
-            _, strange_here = parse_spml(file, signs, scores, scorer)
+            _, strange_here = parse_spml(file, signs, glosses, scores, scorer)
             strange += strange_here
     except KeyboardInterrupt:
         pass
@@ -226,7 +237,7 @@ def main():
     # Generate HTML
     strange = sorted(strange, key=lambda x: len(x.glosses[0]))
     try:
-        for i, sign in enumerate(signs + strange):
+        for i, sign in enumerate([signs[g] for g in glosses] + strange):
             if i % COLUMNS == 0:
                 # Start a new row
                 row_f = ET.SubElement(table_f, 'tr')
@@ -238,12 +249,16 @@ def main():
             row_b.insert(0, cell_b)
 
             # Front contains svg graphic
-            svg = ET.parse(io.StringIO(compose.glyphogram(
-                sign.sign_string,
-                bound=None))).getroot()
-            svg.attrib['viewbox'] = "0 0 {:} {:}".format(
-                svg.attrib['width'], svg.attrib['height'])
-            cell_f.insert(0, svg)
+            try:
+                svg = ET.parse(io.StringIO(compose.glyphogram(
+                    sign.sign_string,
+                    bound=None))).getroot()
+                svg.attrib['viewbox'] = "0 0 {:} {:}".format(
+                    svg.attrib['width'], svg.attrib['height'])
+                cell_f.insert(0, svg)
+            except ValueError:
+                # Leave cell blank
+                pass
 
             # Back contains gloss
             ET.SubElement(cell_b, 'p').text = '; '.join(sign.glosses)

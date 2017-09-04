@@ -22,6 +22,7 @@ setup(
     entry_points={
         'console_scripts': [
             'swip=swip.__main__:main',
+            'swflashcards=swip.swflashcards:main',
         ]
     },
     tests_require=['nose'],

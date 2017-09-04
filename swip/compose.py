@@ -28,17 +28,16 @@ def glyphogram(ksw_string, pad=1, bound=None, line='#000000',
     """
     >>> print(glyphogram(
     ...  'M40x69S35000n18xn18S30c00n18xn18S14c2017x15S22e0420x51'))
-    ... # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+    ... #doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
     <?xml version="1.0" standalone="no"?>
     <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
-    <svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="60.000000" height="89.000000">
-      <metadata>
-        Generated with SWIP using Valerie Sutton's ISWA 2010 symbols (font_svg1)
-        M40x69S35000n18xn18S30c00n18xn18S14c2017x15S22e0420x51
-      </metadata>
-      <g transform="translate(1,1)">
-        ...
-      </g>
+        <svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="60.000000" height="89.000000">
+        <metadata>
+            Generated with SWIP using Valerie Sutton's ISWA 2010 symbols (font_svg1)
+            M40x69S35000n18xn18S30c00n18xn18S14c2017x15S22e0420x51
+        </metadata>
+        <g transform="translate(1,1)"> ...
+        </g>
     </svg>
     """
 
@@ -46,7 +45,6 @@ def glyphogram(ksw_string, pad=1, bound=None, line='#000000',
     layout = parser.parse(ksw_string)
     x_max, y_max = layout[0][1]
     x_min, y_min = parser.min_coordinates(layout, False)
-    print(x_min, x_max, y_min, y_max)
 
     # Crudely center the image
     if bound == 'c' or bound == 'h':

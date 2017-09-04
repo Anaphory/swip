@@ -8,6 +8,7 @@ import argparse
 from .compose import glyphogram
 from .iswa_font import ISWAFont
 
+
 def main():
     """The main CLI."""
     parser = argparse.ArgumentParser(
@@ -33,7 +34,7 @@ def main():
     if args.auto_output and args.output != sys.stdout:
         raise ValueError("Both auto-output and output file specified.")
     elif args.auto_output:
-        args.output = open(args.ksw_string+'.svg', 'w')
+        args.output = open(args.ksw_string + '.svg', 'w')
 
     args.output.write(
         glyphogram(args.ksw_string,

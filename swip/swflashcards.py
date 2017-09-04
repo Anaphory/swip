@@ -1,11 +1,14 @@
 #!python3
 
+"""Generate html for printing flash cards from sign puddle export"""
+
 import io
 import bisect
 
+import os
 import sys
 import json
-import base64
+import argparse
 
 import xml.etree.ElementTree as ET
 
@@ -13,7 +16,7 @@ from urllib.request import urlopen
 from urllib.error import HTTPError
 from urllib.parse import quote_plus
 
-import swip.compose
+from . import compose
 
 ET.register_namespace("", "http://www.w3.org/2000/svg")
 DICTAPI_URL = "https://api.datamuse.com/words?sp={:}&md=f"
@@ -37,13 +40,13 @@ class Sign:
             raise UncleanEntryError
         sign = cl(data[0].text, glosses)
 
-        comment = entry.find("text")
+        comment = spml_entry.find("text")
         if comment is not None:
             if comment.text[0] == 'M' and comment.text[4] == 'x':
                 raise UncleanEntryError
             sign.comment = comment.text
 
-        source = entry.find("src")
+        source = spml_entry.find("src")
         if source is not None:
             sign.source = source.text
 
@@ -53,20 +56,17 @@ class Sign:
         return "<Sign {:}>".format(self.glosses[0].upper())
 
 
-try:
-    cached_glosses
-except NameError:
-    try:
-        with open('gloss_freqs.json') as json_data:
-            cached_glosses = json.load(json_data)
-    except FileNotFoundError:
-        cached_glosses = {}
-
-
 def look_up_frequency(gloss):
-    print(gloss)
-    if gloss in cached_glosses:
-        return cached_glosses[gloss]
+    """Load frequency data from Datamuse
+
+    >>> look_up_frequency("apple")
+    19.314666
+    >>> look_up_frequency("juice")
+    17.828465
+    >>> look_up_frequency("apple-juice") == 0.5 * (
+    ... look_up_frequency("apple")+look_up_frequency("juice"))
+    True
+    """
     dictapi = DICTAPI_URL.format(quote_plus(gloss))
     gloss_dict = urlopen(dictapi).read().decode('utf-8')
 
@@ -74,161 +74,195 @@ def look_up_frequency(gloss):
     if ' ' in gloss:
         parts = gloss.split(" ")
         freq = sum(look_up_frequency(part) or 0.0
-                   for part in parts)/len(parts)
+                   for part in parts) / len(parts)
     elif '-' in gloss:
         parts = gloss.split("-")
         freq = sum(look_up_frequency(part) or 0.0
-                   for part in parts)/len(parts)
+                   for part in parts) / len(parts)
 
     parsed = json.loads(gloss_dict)
     if not parsed or parsed[0]["word"] != gloss.lower():
-        cached_glosses[gloss] = freq
-        return cached_glosses[gloss]
+        return freq
 
     this_freq = float([
         f for f in parsed[0]['tags']
         if f.startswith('f:')][0][2:])
     freq = this_freq if not freq or this_freq > freq else freq
-    cached_glosses[gloss] = freq
     return freq
 
 
-try:
-    cached_images
-except NameError:
-    cached_images = {}
+def parse_spml(spml_file, signs=None, scores=None, scorer=look_up_frequency, debug=False):
+    if signs is None:
+        signs = []
+    if scores is None:
+        scores = [0 for sign in signs]
+    rejected = []
+    strange = []
 
-
-def generate_sign(string):
-    if string in cached_images:
-        image = cached_images[string]
-    else:
+    tree = ET.parse(spml_file)
+    root = tree.getroot()
+    for entry in root.findall("entry"):
         try:
-            with open(string + '.png', 'rb') as localfile:
-                raw = localfile.read()
-        except (FileNotFoundError, OSError):
-            raw = urlopen(SIGN_URL.format(string)).read()
+            sign = Sign.from_spml_entry(entry)
+        except UncleanEntryError:
+            rejected.append(entry)
+            continue
+
+        frequency = 0.0
+        is_strange = True
+        for gloss in sign.glosses:
             try:
-                with open(string + '.png', 'wb') as localfile:
-                    localfile.write(raw)
-            except OSError:
+                # Make sure that the rarest words are at the end of the list.
+                frequency -= scorer(gloss)
+                is_strange = False
+            except TypeError:
                 pass
-        image = cached_images[string] = (
-            base64.b64encode(raw).decode("ascii"))
-        cached_images[string] = image
-    return "data:image/png;base64,{:}".format(image)
+
+        if is_strange:
+            strange.append(sign)
+        else:
+            index = bisect.bisect(scores, frequency)
+            scores.insert(index, frequency)
+            signs.insert(index, sign)
+
+    if debug:
+        return signs, strange, rejected
+    else:
+        return signs, strange
 
 
-rejected = []
-strange = []
+def main():
+    """Run the CLI"""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "spml_file",
+        nargs='+',
+        type=argparse.FileType('r'),
+        help='SPML file(s) to parse')
+    parser.add_argument(
+        "--gloss-scores",
+        type=argparse.FileType('r'),
+        help="JSON file with cached gloss scores")
+    parser.add_argument(
+        "--front",
+        type=argparse.FileType('wb'),
+        help="HTML file to write signs to")
+    parser.add_argument(
+        "--back",
+        type=argparse.FileType('wb'),
+        help="HTML file to write glosses to")
+    args = parser.parse_args()
 
-frequencies = []
-signs_by_frequency = []
+    if args.front is None:
+        name = args.spml_file[0].name
+        args.front = open(
+            (name[:-5] if name.endswith('.spml') else name) +
+            '_f.html', 'wb')
+    if args.back is None:
+        name = args.front.name
+        args.back = open(
+            (name[:-7] if name.endswith('_f.html') else
+             name[:-5] if name.endswith('.html') else name) +
+            '_b.html', 'wb')
 
-try:
-    for FILE in sys.argv[1:]:
-        tree = ET.parse(FILE)
-        root = tree.getroot()
-        for entry in root.findall("entry"):
-            try:
-                sign = Sign.from_spml_entry(entry)
-            except UncleanEntryError:
-                rejected.append(entry)
-                continue
+    # Read a cache file of gloss scores
+    if args.gloss_scores:
+        score_cache = json.load(args.gloss_scores)
+    else:
+        score_cache = {}
 
-            frequency = 0.0
-            is_strange = True
-            for gloss in sign.glosses:
-                try:
-                    # Make sure that the rarest words are at the end of the list.
-                    frequency -= look_up_frequency(gloss)
-                    is_strange = False
-                except TypeError:
-                    pass
-
-            if is_strange:
-                strange.append(sign)
-            else:
-                index = bisect.bisect(frequencies, frequency)
-                frequencies.insert(index, frequency)
-                signs_by_frequency.insert(index, sign)
-except KeyboardInterrupt:
-    pass
-
-with open('gloss_freqs.json', "w") as json_data:
-    json.dump(cached_glosses, json_data)
-
-strange = sorted(strange, key=lambda x: len(x.glosses[0]))
-
-COLUMNS=5
-
-OUTFILE_f = (FILE[:-5] if FILE.endswith(".spml") else FILE) + "_f.html"
-OUTFILE_b = (FILE[:-5] if FILE.endswith(".spml") else FILE) + "_b.html"
-
-STYLE = """
-tr {{ page-break-inside: avoid; }}
-td {{ height: {length:f}cm; width: {length:f}cm; max-height: {length:f}cm; text-align: center; border: 0.3pt solid black; page-break-inside: avoid; overflow: hidden; }}
-svg {{ max-width: {length:f}cm; max-height: {length:f}cm; overflow: hidden; }}
-p {{ max-width: {length:f}cm; max-height: {length:f}cm; overflow: hidden; }}
-p.comment {{ font-size: 0.5em; }}
-""".format(length=18/COLUMNS)
-
-html_f = ET.Element('html')
-document_f = ET.ElementTree(html_f)
-style_f = ET.SubElement(html_f, 'style')
-style_f.text = STYLE
-body_f = ET.SubElement(html_f, 'body')
-table_f = ET.SubElement(body_f, 'table')
-
-html_b = ET.Element('html')
-document_b = ET.ElementTree(html_b)
-style_b = ET.SubElement(html_b, 'style')
-style_b.text = STYLE
-body_b = ET.SubElement(html_b, 'body')
-table_b = ET.SubElement(body_b, 'table')
-
-try:
-    for i, sign in enumerate(signs_by_frequency + strange):
-        if i % COLUMNS == 0:
-            # Start a new row
-            row_f = ET.SubElement(table_f, 'tr')
-            row_b = ET.SubElement(table_b, 'tr')
-            print(i)
-
+    def scorer(gloss):
+        print(gloss, file=sys.stderr)
         try:
-            image_src = generate_sign(sign.sign_string)
-        except HTTPError:
-            rejected.append(sign)
+            return score_cache[gloss]
+        except KeyError:
+            score = look_up_frequency(gloss)
+            score_cache[gloss] = score
+            return score
+
+    # Read all signs from a spml file
+    try:
+        signs = []
+        scores = []
+        strange = []
+        for file in args.spml_file:
+            _, strange_here = parse_spml(file, signs, scores, scorer)
+            strange += strange_here
+    except KeyboardInterrupt:
+        pass
+
+    # Try to write-back a file of gloss scores
+    try:
+        args.gloss_scores.close()
+        with open(args.gloss_scores.name, "w") as json_data:
+            json.dump(score_cache, json_data)
+    except (AttributeError, OSError):
+        pass
+
+    # HTML Template
+    COLUMNS = 4
+
+    STYLE = """
+    tr { page-break-inside: avoid; }
+    td { height: 4.5cm; width: %fcm; text-align: center; border: 0.3pt solid black; page-break-inside: avoid; }
+    svg { max-width: 100%%; max-height: 4.5cm; overflow: hidden; }
+    p { max-width: 100%%; max-height: 4.5cm; overflow: hidden; }
+    """ % (18 / COLUMNS)
+
+    html_f = ET.Element('html')
+    document_f = ET.ElementTree(html_f)
+    style_f = ET.SubElement(html_f, 'style')
+    style_f.text = STYLE
+    body_f = ET.SubElement(html_f, 'body')
+    table_f = ET.SubElement(body_f, 'table')
+
+    html_b = ET.Element('html')
+    document_b = ET.ElementTree(html_b)
+    style_b = ET.SubElement(html_b, 'style')
+    style_b.text = STYLE
+    body_b = ET.SubElement(html_b, 'body')
+    table_b = ET.SubElement(body_b, 'table')
+
+    # Generate HTML
+    strange = sorted(strange, key=lambda x: len(x.glosses[0]))
+    try:
+        for i, sign in enumerate(signs + strange):
+            if i % COLUMNS == 0:
+                # Start a new row
+                row_f = ET.SubElement(table_f, 'tr')
+                row_b = ET.SubElement(table_b, 'tr')
+                print(i, file=sys.stderr)
+
             cell_f = ET.SubElement(row_f, 'td')
             cell_b = ET.Element('td')
             row_b.insert(0, cell_b)
-            continue
 
+            # Front contains svg graphic
+            svg = ET.parse(io.StringIO(compose.glyphogram(
+                sign.sign_string,
+                bound=None))).getroot()
+            svg.attrib['viewbox'] = "0 0 {:} {:}".format(
+                svg.attrib['width'], svg.attrib['height'])
+            cell_f.insert(0, svg)
+
+            # Back contains gloss
+            ET.SubElement(cell_b, 'p').text = '; '.join(sign.glosses)
+            if sign.comment:
+                ET.SubElement(cell_b, 'p', **{'class': 'comment'}).text = sign.comment
+        i += 1
+    except KeyboardInterrupt:
+        pass
+
+    # Fill up last row, so that mirror symmetry is given
+    while i % COLUMNS != 0:
         cell_f = ET.SubElement(row_f, 'td')
-        svg = ET.parse(io.StringIO(swip.compose.glyphogram(
-            sign.sign_string,
-            bound=None))).getroot()
-        svg.attrib['viewbox'] = "0 0 {:} {:}".format(
-            svg.attrib['width'], svg.attrib['height'])
-        cell_f.insert(0, svg)
-
         cell_b = ET.Element('td')
         row_b.insert(0, cell_b)
-        ET.SubElement(cell_b, 'p').text = '; '.join(sign.glosses)
-        if sign.comment:
-            ET.SubElement(cell_b, 'p', **{'class': 'comment'}).text = sign.comment
+        i += 1
 
-    i += 1
-except KeyboardInterrupt:
-    pass
+    # Write output to files
+    document_f.write(args.front)
+    document_b.write(args.back)
 
-
-while i % COLUMNS != 0:
-    cell_f = ET.SubElement(row_f, 'td')
-    cell_b = ET.Element('td')
-    row_b.insert(0, cell_b)
-    i += 1
-
-document_f.write(OUTFILE_f)
-document_b.write(OUTFILE_b)
-
+if __name__ == '__main__':
+    main()
